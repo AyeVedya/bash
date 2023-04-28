@@ -1,0 +1,367 @@
+############################
+# PRACTICAL 01 
+# Generate plots for individual household electric power consumption
+
+classes = c('character', 'character', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 
+            'numeric', 'numeric')
+
+data = read.table('household_power_consumption.txt', colClasses = classes, na.strings = '?', header = TRUE, sep  = ';')
+view(data)
+
+data
+
+data$Date = as.Date(data$Date, '%d/%m/%Y')
+head(data)
+consumption = subset(data, Date>= ('2007-2-1') & Date<= as.Date('2007-2-2'))
+consumption = consumption[complete.cases(consumption),]
+head(consumption)
+
+DateTime = as.POSIXct(paste(consumption$Date, consumption$Time))
+consumption = consumption[, !names(consumption) %in% c('Date', 'Time')]
+consumption = cbind(consumption, DateTime)
+head(consumption)
+
+# Plotting Histogram
+
+hist(consumption$Global_active_power, main = 'Global Active Power', xlab = 'Global Active Power(kw)' ,col = 'red')
+plot(consumption$Global_active_power ~ consumption$DateTime, type = 'l', ylab = 'Global Active Power(kWs)', xlab = '')
+lines(consumption$Sub_metering_2~consumption$DateTime, col = 'Red')
+lines(consumption$Global_active_power ~ consumption$DateTime)
+with(consumption, {
+  plot(Sub_metering_1~DateTime, type = 'l', ylab = 'Global Actib=ve Power(kWs)', xlab = '')
+  lines(Sub_metering_2~DateTime, col = 'Red')
+  lines(Sub_metering_3~DateTime, col = 'Blue')
+  
+})
+
+legend('topright', col = c('red', 'black', 'blue'), lwd = c(1,1,1), legend = c('Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'))
+
+par(mfrow = c(2,2), mar = c(4,4,2,1), oma = c(0,0,2,0))
+with(consumption,{
+  plot(Global_active_power ~ DateTime, type = 'l', ylab = 'Global Active Power(kWs)', xlab = '')
+  plot(Voltage ~ DateTime, type = 'l', ylab = 'Voltage', xlab ='')
+  plot(Sub_metering_1 ~ DateTime, type = 'l', ylab = 'Global Active Power(kWs)', xlab = '')
+  lines(Sub_metering_2 ~ DateTime, col = 'Red')
+  lines(Sub_metering_3 ~ DateTime, col = 'Blue')
+  legend('topright', col = c('black', 'red', 'blue'), lwd = c(1,1,1), legend = c('Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'))
+  plot(Global_active_power ~ DateTime, type = 'l', ylab = 'Global Reactive Power(kWs)', xlab ='')
+  
+})
+
+
+########################################
+# PRACTICAL 02
+# Find out the age of Abalone from physical measurements using regression models
+
+classes = c('factor', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric')
+data = read.csv('abalone.csv')
+View(data)
+str(data)
+summary(data)
+levels(data$Sex)
+table(data$Sex, data$Rings)
+install.packages('dplyr')
+library(dplyr)
+
+data %>% group_by(Sex) %>% summarise(No_of_observations = n())
+library(ggplot2)
+ggplot(data = data, aes(x = Sex, fill = Sex)) + geom_bar()
+
+cor(data$Length, data$Rings)
+cor(data$Diameter, data$Rings)
+
+install.packages('corrplot')
+library(corrplot)
+cor_mat = cor(data[, c(2:9)])
+cor_mat
+
+corrplot(cor_mat, type = 'upper', order = 'hclust', tl.col = 'black', tl.srt = 45)
+
+
+heatmap(cor_mat, margins = c(10,10))
+
+ggplot(data = data, aes(x = Shell.weight, y = Rings, col = Sex)) + geom_point() +geom_smooth(method = 'lm')
+ggplot(data = data, aes(x = Length, y = Rings, col = Sex)) + geom_point() +geom_smooth(method = 'lm')
+
+
+library(caTools)
+cleaned = data %>% mutate(age = case_when(
+  Rings %in% 1:5 ~ 'Young', 
+  Rings %in% 6:13 ~ 'Adult',
+  Rings %in% 14:30 ~ 'Old'
+))
+
+cleaned = cleaned %>% select(c(2,3,5,8,10)) %>% na.omit()
+head(cleaned)
+
+sample = sample.split(cleaned, SplitRatio = 0.8)
+traindata = subset(cleaned, sample = T)
+testdata = subset(cleaned, sample = F)
+
+
+library(rpart)
+model = rpart(formula = age~., data = traindata, method = 'class')
+summary(model)
+
+install.packages('rpart.plot')
+library(rpart.plot)
+rpart.plot(model)
+
+predicted = predict(object = model, newdata = traindata, type = 'class')
+cm = table(traindata$age, predicted)
+cm
+
+accuracy = sum(diag(cm))/ sum(cm)
+accuracy
+
+
+
+##########################
+# PRACTICAL 03
+# Predict student’s knowledge level using classification/ clustering models
+
+
+install.packages('readxl')
+library(readxl)
+df = read_excel('Data_User_Modeling_Dataset_Hamdi Tolga KAHRAMAN (1).xlsx', sheet = 'Training_Data')
+View(df)
+head(df)
+dim(df)
+str(df)
+summary(df)
+
+library(ggplot2)
+ggplot(df, aes(x = UNS, fill = UNS)) + geom_bar()
+
+
+install.packages('GGally')
+library(GGally)
+ggpairs(df, columns = 1:5, aes(col = UNS))
+
+
+df1 = subset(df[, c('STG', 'PEG')])
+df1 = as.matrix(df1)
+maximumClusters = 10
+
+
+scal = scale(df1)
+
+wss = sapply(1:maximumClusters, function(k){
+  kmeans(scal, k, nstart = 50, iter.max = 10)$tot.withinss
+})
+
+plot(1:maximumClusters, wss, type = 'b')
+abline(v = 3, col = 'red')
+
+
+km3 = kmeans(df1, 3, iter.max = 10)
+km3
+km3$withinss
+km3$tot.withinss
+
+df %>% ggplot(aes(STG,PEG, col = km3$cluster)) + geom_point()
+
+km4 = kmeans(df1, 4, iter.max = 10)
+km4
+km4$withinss
+km4$tot.withinss
+km4$iter
+
+km4$cluster = as.factor(km4$cluster)
+df %>% ggplot(aes(STG, PEG, color = km4$cluster)) + geom_point() + ggtitle('K means clustering with k = 4') + xlab('Study Time (STG)') + ylab('Exam Performance(PEG)')
+
+
+#######################
+# PRACTICAL 04 - CLASSIFICATION
+# Predict acceptability of a car using classification models
+
+car_df = read.csv('car_evaluation.csv', sep = ',', header = FALSE)
+head(car_df)
+str(car_df)
+summary(car_df)
+anyNA(car_df)
+
+
+set.seed(3033)
+library(caret)
+
+intrain = createDataPartition(y = car_df$V7, p = 0.7, list = FALSE)
+intrain
+training = car_df[intrain,]
+testing = car_df[-intrain,]
+
+
+dim(training)
+dim(testing)
+
+
+trctrl = trainControl(method = 'repeatedcv', number = 10, repeats = 3)
+set.seed(3333)
+
+
+dtree = train(V7~., data = training, method = 'rpart',
+              parms = list(split = 'information'),
+              trControl = trctrl, 
+              tuneLength =10)
+dtree
+
+library(rpart.plot)
+prp(dtree$finalModel, box.palette = 'Reds', tweak = 1.2)
+
+
+
+testing[1,]
+predict(dtree, newdata = testing[1,])
+
+
+test_pred  = predict(dtree, newdata = testing)
+test_pred
+
+
+test_pred = factor(test_pred, levels = levels(testing$V7))
+confusionMatrix(test_pred, testing$V7)
+
+
+
+#######################
+# PRACTICAL 05 - REGRESSION MODEL
+# Estimate location using classification models based on Wi-Fi signal strength
+
+library(readr)
+wifi_train = read_csv('wifi_train_rm_outliers.csv')
+head(wifi_train)
+str(wifi_train)
+
+wifi_train$room = as.factor(wifi_train$room)
+wifi_test = read.csv('wifi_testfile.csv')
+
+
+library(ggplot2)
+nbplotter = function(i){
+  a = ggplot(data = wifi_train, aes(unlist(wifi_train[, i]), fill = room)) + geom_density(alpha = 0.5)  + xlab(names(wifi_train)[i])
+  return (a)
+  
+}
+library(gridExtra)
+grid.arrange(
+  nbplotter(1),
+  nbplotter(2),
+  nbplotter(3),
+  nbplotter(4),
+  nbplotter(5),
+  nbplotter(6),
+  nrow = 3
+)
+
+
+library(rpart)
+fit.rpart = rpart(room~., data = wifi_train)
+install.packages('rattle')
+library(rattle)
+fancyRpartPlot(fit.rpart)
+
+
+pred.train.rpart = predict(fit.rpart, newdata = wifi_train[, 1:7], type = 'class')
+accuracy.train = mean(pred.train.rpart == wifi_train$room)
+cat('Train Accuracy: ', accuracy.train)
+
+pred.test.rpart = predict(fit.rpart, newdata = wifi_test[, 1:7], type = 'class')
+accuracy.test = mean(pred.test.rpart == wifi_test$room)
+cat('Test Accuracy: ', accuracy.test)
+
+
+#####################################
+# practrical 06
+# # Predict demand of order using regression models
+data = read.csv('Daily_Demand_Forecasting_Orders.csv',header = TRUE, sep = ';')
+head(data)
+dim(data)
+attach(data)
+plot(x = Urgent.order, y = Target..Total.orders., main = 'Urgent and Total Orders')
+model = lm(Target..Total.orders. ~ Urgent.order, data = data)
+summary(model)
+abline(model, col = 'red')
+
+
+new_data = data.frame(Urgent.oreder = c(100, 150, 200))
+forecast = predict(model, newdata = new_data, interval = 'none', level = 0.95)
+forecast  
+
+set.seed(1234)
+index = sample(1:nrow(data), nrow(data) * 0.7)
+training = data[index,]
+testing = data[-index,]
+dim(training)
+dim(testing)
+
+new_model = lm(Target..Total.orders.~Urgent.order, data = training)
+predicted = predict(new_model, newdata = testing, interva = 'none')
+df = testing[, c('Urgent.order', 'Target..Total.orders.')]
+df['predicted'] = predicted
+df
+
+
+
+#################################
+#Practical 7
+# Predict survival of heart attack patient using classification models
+
+
+echo_df=read.csv("echocardiogram.csv",na.strings = c("?","NA"))
+str(echo_df)
+View(echo_df)
+library(DataExplorer)
+plot_str(echo_df)
+plot_missing(echo_df)
+echo_df1=na.omit(echo_df)
+str(echo_df1)
+echo_df1$aliveat1=as.factor(echo_df1$aliveat1)
+library(ggplot2)
+library(rpart)
+install.packages(rpart.plot)
+library(rpart.plot) #Decision Tree Display
+library(caret)
+ggplot(echo_df1,aes(x=age,y=survival,color=aliveat1,size=age))+geom_point(alpha=0.9)
+set.seed(111)
+index=sample(1:nrow(echo_df1),nrow(echo_df1)*0.8)
+training=echo_df1[index,]
+testing=echo_df1[-index,]
+dim(training)
+dim(testing)
+model_echo=rpart(aliveat1~age+pericardialeffusion+fractionalshortening+epss+lvdd+wallmotion.score+wallmotion.index,data = training,method = "class")
+prediction=predict(model_echo,newdata = testing,type = "class")
+confusionMatrix(testing$aliveat1,prediction)
+rpart.plot(model_echo)
+
+
+
+###############################
+#Practical 8
+# Forecast pollution level of a city using regression models
+
+
+PRSA_df=read.csv("PRSA_data_2010.1.1-2014.12.31.csv",na.strings = c("?","NA"))
+str(PRSA_df)
+View(PRSA_df)
+library(DataExplorer)
+plot_str(PRSA_df)
+plot_missing(PRSA_df)
+new_df1=na.omit(PRSA_df)
+str(new_df1)
+View(new_df1)                	
+model_df = new_df1 %>% select(pm2.5, DEWP, TEMP, PRES, cbwd, Iws, Is, Ir)
+model_df
+set.seed(123)
+training.samples <- model_df$pm2.5 %>% createDataPartition(p = 0.8, list = FALSE)
+train.data <- model_df[training.samples, ]
+test.data <- model_df[-training.samples, ]
+model <- train(pm2.5 ~ ., data = train.data, method = "lm")
+predictions <- predict(model, test.data)
+
+
+ggplot(test.data, aes(x = pm2.5, y = predictions)) +
+  geom_point() +
+  geom_abline(col='red',lwd=2) +
+  xlab("Actual PM2.5 levels") +
+  ylab("Predicted PM2.5 levels") +
+  ggtitle("Regression Model for PM2.5 Levels")
